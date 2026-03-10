@@ -1,6 +1,5 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
 from typing import Optional
 from api.dgii_service import DgiiService
 
@@ -16,17 +15,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-# ---------------------------------------------------------------------------
-# Request models
-# ---------------------------------------------------------------------------
-
-class TaxReceiptNumberRequest(BaseModel):
-    rncIssuer: str = Field(..., min_length=9, max_length=11, pattern=r"^[0-9]+$")
-    trn: str = Field(..., min_length=11, max_length=13)
-    rncConsumer: Optional[str] = ""
-    securityCode: Optional[str] = ""
 
 
 # ---------------------------------------------------------------------------
@@ -66,9 +54,14 @@ def get_citizen(identity_number: str):
 
 
 @app.post("/api/taxreceiptsnumbers")
-def validate_tax_receipt_number(body: TaxReceiptNumberRequest):
+def validate_tax_receipt_number(
+    rncIssuer: str = Form(...),
+    trn: str = Form(...),
+    rncConsumer: Optional[str] = Form(""),
+    securityCode: Optional[str] = Form(""),
+):
     result = DgiiService.validate_ncf(
-        body.rncIssuer, body.trn, body.rncConsumer or "", body.securityCode or ""
+        rncIssuer, trn, rncConsumer or "", securityCode or ""
     )
 
     if not result["success"]:
@@ -76,7 +69,7 @@ def validate_tax_receipt_number(body: TaxReceiptNumberRequest):
 
     return {
         "isValid":             result["is_valid"],
-        "dueDate":             result["due_date"].strftime("%Y-%m-%d") if result["due_date"] else None,
+        "dueDate":             result["due_date"].strftime("%Y-%m-%dT%H:%M:%S") if result["due_date"] else None,
         "rnc":                 result["rnc_issuer"],
         "ncf":                 result["ncf"],
         "taxContibutorName":   result["contributor_name"],
