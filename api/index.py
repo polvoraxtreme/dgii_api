@@ -75,11 +75,11 @@ def validate_tax_receipt_number(body: TaxReceiptNumberRequest):
         raise HTTPException(status_code=500, detail=result["error"])
 
     return {
-        "isValid":            result["is_valid"],
-        "dueDate":            result["due_date"].isoformat() if result["due_date"] else None,
-        "rnc":                result["rnc_issuer"],
-        "ncf":                result["ncf"],
-        "taxContributorName": result["contributor_name"],
+        "isValid":             result["is_valid"],
+        "dueDate":             result["due_date"].strftime("%Y-%m-%dT%H:%M:%S") if result["due_date"] else None,
+        "rnc":                 result["rnc_issuer"],
+        "ncf":                 result["ncf"],
+        "taxContibutorName":   result["contributor_name"],
     }
 
 
