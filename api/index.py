@@ -76,7 +76,7 @@ def validate_tax_receipt_number(body: TaxReceiptNumberRequest):
 
     return {
         "isValid":             result["is_valid"],
-        "dueDate":             result["due_date"].strftime("%Y-%m-%dT%H:%M:%S") if result["due_date"] else None,
+        "dueDate":             result["due_date"].strftime("%Y-%m-%d") if result["due_date"] else None,
         "rnc":                 result["rnc_issuer"],
         "ncf":                 result["ncf"],
         "taxContibutorName":   result["contributor_name"],
