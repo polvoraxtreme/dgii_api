@@ -22,14 +22,6 @@ app.add_middleware(
 # Request models
 # ---------------------------------------------------------------------------
 
-class TaxContributorRequest(BaseModel):
-    rnc: str = Field(..., min_length=9, max_length=11, pattern=r"^[0-9]+$")
-
-
-class CitizenRequest(BaseModel):
-    identityNumber: str = Field(..., min_length=3, max_length=11, pattern=r"^[0-9]+$")
-
-
 class TaxReceiptNumberRequest(BaseModel):
     rncIssuer: str = Field(..., min_length=9, max_length=11, pattern=r"^[0-9]+$")
     trn: str = Field(..., min_length=11, max_length=13)
@@ -41,9 +33,9 @@ class TaxReceiptNumberRequest(BaseModel):
 # Endpoints
 # ---------------------------------------------------------------------------
 
-@app.post("/api/taxcontributors")
-def get_tax_contributor(body: TaxContributorRequest):
-    result = DgiiService.query_rnc(body.rnc)
+@app.get("/api/taxcontributors/{rnc}")
+def get_tax_contributor(rnc: str):
+    result = DgiiService.query_rnc(rnc)
 
     if not result["success"]:
         raise HTTPException(status_code=404, detail=result["error"])
@@ -58,9 +50,9 @@ def get_tax_contributor(body: TaxContributorRequest):
     }
 
 
-@app.post("/api/citizens")
-def get_citizen(body: CitizenRequest):
-    result = DgiiService.query_citizen(body.identityNumber)
+@app.get("/api/citizens/{identity_number}")
+def get_citizen(identity_number: str):
+    result = DgiiService.query_citizen(identity_number)
 
     if not result["success"]:
         raise HTTPException(status_code=404, detail=result["error"])
