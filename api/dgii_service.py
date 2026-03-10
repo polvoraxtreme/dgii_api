@@ -28,8 +28,9 @@ from datetime import datetime
 _logger = logging.getLogger(__name__)
 
 _BASE_URL  = "https://dgii.gov.do/app/WebApps/ConsultasWeb2/ConsultasWeb/consultas/"
-_RNC_PAGE  = _BASE_URL + "rnc.aspx"
-_NCF_PAGE  = _BASE_URL + "ncf.aspx"
+_RNC_PAGE      = _BASE_URL + "rnc.aspx"
+_NCF_PAGE      = _BASE_URL + "ncf.aspx"
+_CITIZEN_PAGE  = _BASE_URL + "ciudadanos.aspx"
 _TIMEOUT   = 12
 
 _HEADERS = {
@@ -44,13 +45,15 @@ _HEADERS = {
 
 class _Parser(HTMLParser):
     """Single-pass ASP.NET WebForms parser.
-    Collects ViewState hidden inputs and span/label text by id.
+    Collects ViewState hidden inputs, span/label text by id, and div text by id.
     """
     def __init__(self):
         super().__init__(convert_charrefs=True)
         self._inputs: dict = {}   # id -> value
         self._spans:  dict = {}   # id -> text
+        self._divs:   dict = {}   # id -> text
         self._cur_id = None
+        self._cur_tag = None
 
     def handle_starttag(self, tag, attrs):
         a = dict(attrs)
@@ -59,14 +62,25 @@ class _Parser(HTMLParser):
             self._inputs[a.get("id", "")] = a.get("value", "")
         if tag in ("span", "label"):
             self._cur_id = a.get("id")
+            self._cur_tag = tag
+        if tag == "div" and a.get("id"):
+            self._cur_id = a.get("id")
+            self._cur_tag = "div"
 
     def handle_endtag(self, tag):
-        if tag.lower() in ("span", "label"):
+        tag = tag.lower()
+        if tag in ("span", "label") and self._cur_tag in ("span", "label"):
             self._cur_id = None
+            self._cur_tag = None
+        if tag == "div" and self._cur_tag == "div":
+            self._cur_id = None
+            self._cur_tag = None
 
     def handle_data(self, data):
-        if self._cur_id:
+        if self._cur_id and self._cur_tag in ("span", "label"):
             self._spans[self._cur_id] = self._spans.get(self._cur_id, "") + data
+        elif self._cur_id and self._cur_tag == "div":
+            self._divs[self._cur_id] = self._divs.get(self._cur_id, "") + data
 
     # --- helpers ---
     def viewstate(self) -> dict:
@@ -82,6 +96,12 @@ class _Parser(HTMLParser):
 
     def span(self, partial_id: str) -> str:
         for k, v in self._spans.items():
+            if partial_id.lower() in k.lower():
+                return v.strip()
+        return ""
+
+    def div(self, partial_id: str) -> str:
+        for k, v in self._divs.items():
             if partial_id.lower() in k.lower():
                 return v.strip()
         return ""
@@ -229,6 +249,51 @@ class DgiiService:
             result["error"] = f"Error de conexión con la DGII: {e.reason}"
         except Exception as e:
             _logger.exception("DGII unexpected error RNC=%s", rnc)
+            result["error"] = str(e)
+
+        return result
+
+    @staticmethod
+    def query_citizen(cedula: str) -> dict:
+        result = {
+            "success": False, "rnc": cedula, "name": "",
+            "status_raw": "", "status": 1, "error": "",
+        }
+        try:
+            vs = _vs(_CITIZEN_PAGE)
+            vs["ctl00$cphMain$txtCedula"] = cedula.strip()
+            vs["ctl00$cphMain$btnBuscarCedula"] = "Buscar"
+
+            html = _post(_CITIZEN_PAGE, vs)
+            p = _parse(html)
+
+            alert = p.div("divAlertDanger")
+            if alert:
+                result["error"] = alert
+                return result
+
+            rnc_val    = _cell_after_bold(html, "RNC").replace("-", "")
+            name       = _cell_after_bold(html, "Nombre")
+            status_raw = _cell_after_bold(html, "Estado")
+
+            su = status_raw.upper()
+            status = 2 if su == "ACTIVO" else 3 if "BAJA" in su else 1
+
+            result.update({
+                "success":    bool(rnc_val or name),
+                "rnc":        rnc_val or cedula,
+                "name":       name,
+                "status_raw": status_raw,
+                "status":     status,
+            })
+            if not result["success"]:
+                result["error"] = "No se encontró información para esta Cédula."
+
+        except urllib.error.URLError as e:
+            _logger.exception("DGII connection error Cedula=%s", cedula)
+            result["error"] = f"Error de conexión con la DGII: {e.reason}"
+        except Exception as e:
+            _logger.exception("DGII unexpected error Cedula=%s", cedula)
             result["error"] = str(e)
 
         return result
