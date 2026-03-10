@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
 from api.dgii_service import DgiiService
 
@@ -18,9 +18,32 @@ app.add_middleware(
 )
 
 
-@app.get("/api/taxcontributors/{rnc}")
-def get_tax_contributor(rnc: str):
-    result = DgiiService.query_rnc(rnc)
+# ---------------------------------------------------------------------------
+# Request models
+# ---------------------------------------------------------------------------
+
+class TaxContributorRequest(BaseModel):
+    rnc: str = Field(..., min_length=9, max_length=11, pattern=r"^[0-9]+$")
+
+
+class CitizenRequest(BaseModel):
+    identityNumber: str = Field(..., min_length=3, max_length=11, pattern=r"^[0-9]+$")
+
+
+class TaxReceiptNumberRequest(BaseModel):
+    rncIssuer: str = Field(..., min_length=9, max_length=11, pattern=r"^[0-9]+$")
+    trn: str = Field(..., min_length=11, max_length=13)
+    rncConsumer: Optional[str] = ""
+    securityCode: Optional[str] = ""
+
+
+# ---------------------------------------------------------------------------
+# Endpoints
+# ---------------------------------------------------------------------------
+
+@app.post("/api/taxcontributors")
+def get_tax_contributor(body: TaxContributorRequest):
+    result = DgiiService.query_rnc(body.rnc)
 
     if not result["success"]:
         raise HTTPException(status_code=404, detail=result["error"])
@@ -35,9 +58,9 @@ def get_tax_contributor(rnc: str):
     }
 
 
-@app.get("/api/citizens/{identity_number}")
-def get_citizen(identity_number: str):
-    result = DgiiService.query_citizen(identity_number)
+@app.post("/api/citizens")
+def get_citizen(body: CitizenRequest):
+    result = DgiiService.query_citizen(body.identityNumber)
 
     if not result["success"]:
         raise HTTPException(status_code=404, detail=result["error"])
@@ -48,13 +71,6 @@ def get_citizen(identity_number: str):
         "estado":           result["status_raw"],
         "esContribuyente":  True,
     }
-
-
-class TaxReceiptNumberRequest(BaseModel):
-    rncIssuer: str
-    trn: str
-    rncConsumer: Optional[str] = ""
-    securityCode: Optional[str] = ""
 
 
 @app.post("/api/taxreceiptsnumbers")
