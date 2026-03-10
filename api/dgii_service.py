@@ -126,10 +126,17 @@ def _vs(url: str) -> dict:
 # ---------------------------------------------------------------------------
 
 def _cell_after_bold(html: str, bold_text: str) -> str:
+    # Try new DGII format: <td style="font-weight:bold;">Label</td><td>Value</td>
     m = re.search(
-        r'<b[^>]*>[^<]*' + re.escape(bold_text) + r'[^<]*</b>\s*</td>\s*<td[^>]*>(.*?)</td>',
+        r'<td[^>]*font-weight:\s*bold[^>]*>[^<]*' + re.escape(bold_text) + r'[^<]*</td>\s*<td[^>]*>(.*?)</td>',
         html, re.IGNORECASE | re.DOTALL
     )
+    # Fallback to old format: <b>Label</b></td><td>Value</td>
+    if not m:
+        m = re.search(
+            r'<b[^>]*>[^<]*' + re.escape(bold_text) + r'[^<]*</b>\s*</td>\s*<td[^>]*>(.*?)</td>',
+            html, re.IGNORECASE | re.DOTALL
+        )
     if not m:
         return ""
     raw = re.sub(r'<[^>]+>', '', m.group(1))
